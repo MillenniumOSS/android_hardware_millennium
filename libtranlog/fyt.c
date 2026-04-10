@@ -124,3 +124,36 @@ void submit_msg_wrapper(void *handle, unsigned int module,
 void submit_msg_12(void *handle, unsigned int module,
                    uint64_t timestamp, const char *tag) {
 }
+
+void *getConfig(const char *id) {
+    return NULL;
+}
+ 
+unsigned int getEnabled(const char *content) {
+    return 0xffffffff;
+}
+ 
+void *getString(const char *content, long key) {
+    return NULL;
+}
+ 
+void *getStringArray(const char *content, long key, unsigned int *out_count) {
+    if (out_count)
+        *out_count = 0;
+    return NULL;
+}
+ 
+int getInt(const char *content, long key) {
+    return 0;
+}
+ 
+void isReady(void) {
+}
+
+void *startListener(void (*callback)(void)) {
+    if (callback == NULL) {
+        ALOGE("athena callback was null");
+        return NULL;
+    }
+    return NULL;
+}
