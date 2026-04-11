@@ -1,0 +1,41 @@
+//
+// SPDX-FileCopyrightText: MillenniumOSS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_library_shared {
+    name: "vendor.transsion.hardware.trancam.trancamserver@1.0-impl",
+    defaults: ["hidl_defaults"],
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: ["Trancamserver.cpp"],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "liblog",
+        "libhidlbase",
+        "libutils",
+        "vendor.transsion.hardware.trancam.trancamserver@1.0",
+    ],
+}
+
+cc_binary {
+    name: "vendor.transsion.hardware.trancam.trancamserver@1.0-service",
+    defaults: ["hidl_defaults"],
+    init_rc: ["vendor.transsion.hardware.trancam.trancamserver@1.0-service.rc"],
+    vintf_fragments: ["vendor.transsion.hardware.trancam.trancamserver@1.0-service.xml"],
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: [
+        "Trancamserver.cpp",
+        "service.cpp",
+    ],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "liblog",
+        "libhidlbase",
+        "libutils",
+        "vendor.transsion.hardware.trancam.trancamserver@1.0",
+    ],
+}

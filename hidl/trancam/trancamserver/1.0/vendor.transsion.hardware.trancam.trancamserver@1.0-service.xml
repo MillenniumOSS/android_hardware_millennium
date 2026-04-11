@@ -1,0 +1,11 @@
+<manifest version="1.0" type="device">
+    <hal format="hidl">
+        <n>vendor.transsion.hardware.trancam.trancamserver</n>
+        <transport>hwbinder</transport>
+        <version>1.0</version>
+        <interface>
+            <n>ITrancamserver</n>
+            <instance>default</instance>
+        </interface>
+    </hal>
+</manifest>

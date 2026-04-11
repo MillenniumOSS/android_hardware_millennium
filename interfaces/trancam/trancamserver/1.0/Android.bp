@@ -1,0 +1,18 @@
+//
+// SPDX-FileCopyrightText: MillenniumOSS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+hidl_interface {
+    name: "vendor.transsion.hardware.trancam.trancamserver@1.0",
+    root: "vendor.transsion",
+    srcs: [
+        "IEventCallback.hal",
+        "ITrancamserver.hal",
+    ],
+    interfaces: [
+        "android.hidl.base@1.0",
+    ],
+    gen_java: false,
+    vendor: true,
+}

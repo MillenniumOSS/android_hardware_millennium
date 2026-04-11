@@ -1,0 +1,9 @@
+//
+// SPDX-FileCopyrightText: MillenniumOSS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+hidl_package_root {
+    name: "vendor.transsion",
+    path: "hardware/millennium/interfaces/trancam",
+}

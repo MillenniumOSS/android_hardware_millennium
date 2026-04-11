@@ -1,0 +1,15 @@
+/*
+ * Copyright (C) 2026 MillenniumOSS
+ * SPDX-License-Identifer: Apache-2.0
+ */
+
+package vendor.transsion.hardware.trancam.trancamserver@1.0;
+
+import IEventCallback;
+
+interface ITrancamserver {
+    setPackagename(string packagename);
+    getPackagename() generates (string packagename);
+    setEventCallback(IEventCallback callback);
+    getEventCallback() generates (IEventCallback callback);
+};

@@ -1,0 +1,10 @@
+/*
+ * Copyright (C) 2026 MillenniumOSS
+ * SPDX-License-Identifer: Apache-2.0
+ */
+
+package vendor.transsion.hardware.trancam.trancamserver@1.0;
+
+interface IEventCallback {
+    onTelescopicStatusCallback(int32_t status, int32_t extra) generates (bool result);
+};
