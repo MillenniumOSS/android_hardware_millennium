@@ -13,8 +13,68 @@
 #include <hardware/hardware.h>
 #include "BiometricsFingerprint.h"
 
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <string.h>
 #include <unistd.h>
+
+namespace {
+
+static const struct {
+    const char* vendor;
+    const char* module_id;
+} kVendors[] = {
+        {"sunwave", "swfingerprint"},
+        {"microarray", "microarray.fingerprint"},
+        {"goodix", "gf_fingerprint"},
+        {"chipone", "fpsensor_fingerprint"},
+        {"cdfinger", "cdfinger.fingerprint"},
+        {"focaltech", "focal_fingerprint"},
+        {"silead", "fingerprint.silead"},
+        {"fpc", "fingerprint.fpc"},
+        {"fortsense", "fsfingerprint"},
+};
+
+static void load_vendor_ext(const char* path, const char* sym) {
+    void* handle = dlopen(path, RTLD_NOW);
+    if (!handle) {
+        return;
+    }
+    auto fn = reinterpret_cast<int (*)()>(dlsym(handle, sym));
+    if (fn) {
+        fn();
+    }
+    dlclose(handle);
+}
+
+static int get_fingerprint_vendor() {
+    char buf[64] = {0};
+    int fd = open("/sys/kernel/tran_fp/vendor_name", O_RDONLY);
+    if (fd < 0) {
+        ALOGE("get_fingerprint_vendor open sys node /sys/kernel/tran_fp/vendor_name fail, fd = %d, "
+              "errno = %d",
+              fd, errno);
+        return -EINVAL;
+    }
+    ssize_t len = TEMP_FAILURE_RETRY(read(fd, buf, sizeof(buf) - 1));
+    close(fd);
+    if (len <= 0) {
+        ALOGE("read sys node fail or empty");
+        return -EINVAL;
+    }
+    buf[len] = '\0';
+    for (size_t i = 0; i < sizeof(kVendors) / sizeof(kVendors[0]); i++) {
+        if (strstr(buf, kVendors[i].vendor) != nullptr) {
+            ALOGD("FINGERPRINT type is %s", kVendors[i].vendor);
+            return static_cast<int>(i);
+        }
+    }
+    return -EINVAL;
+}
+
+}
 
 namespace android {
 namespace hardware {
@@ -155,37 +215,45 @@ Return<uint64_t> BiometricsFingerprint::setNotify(
 }
 
 Return<uint64_t> BiometricsFingerprint::preEnroll() {
+    if (!mDevice) return 0;
     return mDevice->pre_enroll(mDevice);
 }
 
 Return<RequestStatus> BiometricsFingerprint::enroll(const hidl_array<uint8_t, 69>& hat,
                                                     uint32_t gid, uint32_t timeoutSec) {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     const hw_auth_token_t* authToken = reinterpret_cast<const hw_auth_token_t*>(hat.data());
     return ErrorFilter(mDevice->enroll(mDevice, authToken, gid, timeoutSec));
 }
 
 Return<RequestStatus> BiometricsFingerprint::postEnroll() {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     return ErrorFilter(mDevice->post_enroll(mDevice));
 }
 
 Return<uint64_t> BiometricsFingerprint::getAuthenticatorId() {
+    if (!mDevice) return 0;
     return mDevice->get_authenticator_id(mDevice);
 }
 
 Return<RequestStatus> BiometricsFingerprint::cancel() {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     return ErrorFilter(mDevice->cancel(mDevice));
 }
 
 Return<RequestStatus> BiometricsFingerprint::enumerate() {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     return ErrorFilter(mDevice->enumerate(mDevice));
 }
 
 Return<RequestStatus> BiometricsFingerprint::remove(uint32_t gid, uint32_t fid) {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     return ErrorFilter(mDevice->remove(mDevice, gid, fid));
 }
 
 Return<RequestStatus> BiometricsFingerprint::setActiveGroup(uint32_t gid,
                                                             const hidl_string& storePath) {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     if (storePath.size() >= PATH_MAX || storePath.size() <= 0) {
         ALOGE("Bad path length: %zd", storePath.size());
         return RequestStatus::SYS_EINVAL;
@@ -198,6 +266,7 @@ Return<RequestStatus> BiometricsFingerprint::setActiveGroup(uint32_t gid,
 }
 
 Return<RequestStatus> BiometricsFingerprint::authenticate(uint64_t operationId, uint32_t gid) {
+    if (!mDevice) return RequestStatus::SYS_UNKNOWN;
     return ErrorFilter(mDevice->authenticate(mDevice, operationId, gid));
 }
 
@@ -205,14 +274,42 @@ IBiometricsFingerprint* BiometricsFingerprint::getInstance() {
     if (!sInstance) {
         sInstance = new BiometricsFingerprint();
     }
+    if (!sInstance->mDevice) {
+        delete sInstance;
+        sInstance = nullptr;
+    }
     return sInstance;
 }
 
 fingerprint_device_t* BiometricsFingerprint::openHal() {
     int err;
     const hw_module_t* hw_mdl = nullptr;
-    ALOGD("Opening fingerprint hal library...");
-    if (0 != (err = hw_get_module(FINGERPRINT_HARDWARE_MODULE_ID, &hw_mdl))) {
+    int vendor_idx = get_fingerprint_vendor();
+    if (vendor_idx < 0) {
+        return nullptr;
+    }
+
+    if (vendor_idx != 4) {
+        load_vendor_ext("/vendor/lib64/hw/cdfinger.fingerprint.default.so",
+                        "load_cdfingerfactory_for_non_cdfinger");
+    }
+
+    if (vendor_idx != 3) {
+        load_vendor_ext("/vendor/lib64/hw/fpsensor_fingerprint.default.so",
+                        "load_extsvc2_for_non_fpsensor");
+    }
+
+    if (vendor_idx != 2) {
+        const hw_module_t* gf_mdl = nullptr;
+        hw_device_t* gf_dev = nullptr;
+        if (hw_get_module("gf_fingerprint", &gf_mdl) == 0 && gf_mdl && gf_mdl->methods &&
+            gf_mdl->methods->open) {
+            gf_mdl->methods->open(gf_mdl, nullptr, &gf_dev);
+        }
+    }
+
+    ALOGD("Opening fingerprint [%d]-[%s] hal library", vendor_idx, kVendors[vendor_idx].module_id);
+    if (0 != (err = hw_get_module(kVendors[vendor_idx].module_id, &hw_mdl))) {
         ALOGE("Can't open fingerprint HW Module, error: %d", err);
         return nullptr;
     }
@@ -223,7 +320,7 @@ fingerprint_device_t* BiometricsFingerprint::openHal() {
     }
 
     fingerprint_module_t const* module = reinterpret_cast<const fingerprint_module_t*>(hw_mdl);
-    if (module->common.methods->open == nullptr) {
+    if (module->common.methods == nullptr || module->common.methods->open == nullptr) {
         ALOGE("No valid open method");
         return nullptr;
     }
@@ -232,6 +329,11 @@ fingerprint_device_t* BiometricsFingerprint::openHal() {
 
     if (0 != (err = module->common.methods->open(hw_mdl, nullptr, &device))) {
         ALOGE("Can't open fingerprint methods, error: %d", err);
+        return nullptr;
+    }
+
+    if (device == nullptr) {
+        ALOGE("No valid device");
         return nullptr;
     }
 
@@ -252,10 +354,17 @@ fingerprint_device_t* BiometricsFingerprint::openHal() {
 }
 
 void BiometricsFingerprint::notify(const fingerprint_msg_t* msg) {
+    if (!msg) {
+        return;
+    }
     BiometricsFingerprint* thisPtr =
             static_cast<BiometricsFingerprint*>(BiometricsFingerprint::getInstance());
+    if (thisPtr == nullptr) {
+        ALOGE("Receiving callbacks before the client callback is registered.");
+        return;
+    }
     std::lock_guard<std::mutex> lock(thisPtr->mClientCallbackMutex);
-    if (thisPtr == nullptr || thisPtr->mClientCallback == nullptr) {
+    if (thisPtr->mClientCallback == nullptr) {
         ALOGE("Receiving callbacks before the client callback is registered.");
         return;
     }
