@@ -1,0 +1,10 @@
+//
+// Copyright (C) 2026 MillenniumOSS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_library_shared {
+    name: "libTranMegHumanEffect",
+    vendor: true,
+    srcs: ["TranMegHumanEffect.cpp"],
+}
