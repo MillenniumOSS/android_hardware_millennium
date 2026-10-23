@@ -8,3 +8,9 @@ cc_library_shared {
     vendor: true,
     srcs: ["TranMegHumanEffect.cpp"],
 }
+
+cc_library_shared {
+    name: "libcam3_transerverengine",
+    vendor: true,
+    srcs: ["Cam3TranServerEngine.cpp"],
+}
